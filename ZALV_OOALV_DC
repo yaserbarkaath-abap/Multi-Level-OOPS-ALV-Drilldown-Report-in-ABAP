@@ -1,0 +1,315 @@
+*&---------------------------------------------------------------------*
+*& Report ZALV_OOALV_DC
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zalv_ooalv_dc MESSAGE-ID Zmc_ooalv.
+
+TABLES: ekko, ekpo,eket.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME title  text-000.
+SELECT-OPTIONS: s_ebeln FOR ekko-ebeln,
+                 s_aedat FOR ekko-aedat MODIF ID crd,
+                 s_EBELP FOR eket-ebelp .
+SELECTION-SCREEN end of BLOCK b1.
+PARAMETERS p_cb TYPE c AS CHECKBOX USER-COMMAND select .
+DATA: lo_obj1      TYPE REF TO cl_gui_custom_container,
+      lo_grid1     TYPE REF TO cl_gui_alv_grid,
+      it_fieldcat1 TYPE lvc_t_fcat,
+      wa_fieldcat1 TYPE lvc_s_fcat.
+
+DATA: lo_obj2      TYPE REF TO cl_gui_custom_container,
+      lo_grid2     TYPE REF TO cl_gui_alv_grid,
+      it_fieldcat2 TYPE lvc_t_fcat,
+      wa_fieldcat2 TYPE lvc_s_fcat.
+
+DATA: lo_obj3      TYPE REF TO cl_gui_custom_container,
+      lo_grid3     TYPE REF TO cl_gui_alv_grid,
+      it_fieldcat3 TYPE lvc_t_fcat,
+      wa_fieldcat3 TYPE lvc_s_fcat.
+
+DATA: diff     TYPE datum,
+      it_rows  TYPE lvc_t_row,
+      wa_rows  TYPE lvc_s_row,
+      it_rows2 TYPE lvc_t_row,
+      wa_rows2 TYPE lvc_s_row.
+
+TYPES: BEGIN OF ty_ekko,
+         ebeln TYPE ebeln,
+         bukrs TYPE bukrs,
+         bstyp TYPE ebstyp,
+         aedat TYPE mmpur_erdat,
+         statu TYPE estak,
+       END OF ty_ekko.
+
+TYPES: BEGIN OF ty_ekpo,
+         ebeln TYPE ebeln,
+         ebelp TYPE ebelp,
+         matnr TYPE matnr,
+         bukrs TYPE bukrs,
+         werks TYPE werks,
+       END OF ty_ekpo.
+
+TYPES : BEGIN OF ty_eket,
+          ebeln TYPE ebeln,
+          ebelp TYPE ebelp,
+          etenr TYPE eeten,
+          banfn TYPE banfn,
+        END OF ty_eket.
+
+DATA: it_ekko TYPE TABLE OF ty_ekko,
+      wa_ekko TYPE ty_ekko,
+      it_ekpo TYPE TABLE OF ty_ekpo,
+      wa_ekpo TYPE ty_ekpo,
+      it_eket TYPE TABLE OF ty_eket.
+
+INITIALIZATION.
+  s_aedat-sign   = 'I'.
+  s_aedat-option = 'BT'.
+  s_aedat-low    = sy-datum - 90.
+  s_aedat-high   = sy-datum.
+  APPEND s_aedat.
+
+AT SELECTION-SCREEN OUTPUT.
+  IF p_cb = ' '.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'CRD'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ELSEIF p_cb = 'X'.
+    LOOP AT SCREEN.
+      IF  screen-group1 = 'CRD'.
+        screen-active = 1.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+AT SELECTION-SCREEN.
+  diff = s_aedat-high - s_aedat-low.
+  IF diff > 90.
+    MESSAGE w000.
+  ENDIF.
+
+CLASS c1 DEFINITION.
+  PUBLIC SECTION.
+    METHODS handle FOR EVENT double_click OF cl_gui_alv_grid.
+ENDCLASS.
+
+CLASS c1 IMPLEMENTATION.
+  METHOD handle.
+    CALL METHOD lo_grid1->get_selected_rows
+      IMPORTING
+        et_index_rows = it_rows.
+    READ TABLE it_rows INTO wa_rows INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE it_ekko INTO wa_ekko INDEX wa_rows-index.
+      IF sy-subrc = 0.
+        SELECT FROM ekpo FIELDS
+          ebeln,
+               ebelp,
+               matnr,
+               bukrs,
+               werks
+          WHERE ebeln = @wa_ekko-ebeln
+        INTO TABLE @it_ekpo.
+
+        CALL METHOD lo_grid2->set_table_for_first_display
+          CHANGING
+            it_outtab                     = it_ekpo
+            it_fieldcatalog               = it_fieldcat2
+          EXCEPTIONS
+            invalid_parameter_combination = 1
+            program_error                 = 2
+            too_many_lines                = 3
+            OTHERS                        = 4.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS c2 DEFINITION.
+  PUBLIC SECTION.
+    METHODS handle2 FOR EVENT double_click OF cl_gui_alv_grid.
+ENDCLASS.
+
+CLASS c2 IMPLEMENTATION.
+  METHOD handle2 .
+    CALL METHOD lo_grid2->get_selected_rows
+      IMPORTING
+        et_index_rows = it_rows2.
+    READ TABLE it_rows2 INTO wa_rows2 INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE it_ekpo INTO wa_ekpo INDEX wa_rows2-index.
+      IF sy-subrc = 0.
+        SELECT FROM eket
+          FIELDS ebeln,
+               ebelp,
+          etenr,
+          banfn
+  WHERE ebeln = @wa_ekpo-ebeln AND ebelp = @wa_ekpo-ebelp
+          INTO TABLE @it_eket.
+      ENDIF.
+    ENDIF.
+
+    CALL METHOD lo_grid3->set_table_for_first_display
+      CHANGING
+        it_outtab                     = it_eket
+        it_fieldcatalog               = it_fieldcat3
+      EXCEPTIONS
+        invalid_parameter_combination = 1
+        program_error                 = 2
+        too_many_lines                = 3
+        OTHERS                        = 4.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+
+  SELECT FROM ekko
+    FIELDS ebeln, bukrs, bstyp, aedat, statu
+  WHERE ebeln IN @s_ebeln AND aedat IN @s_aedat
+  INTO TABLE @it_ekko.
+
+  CLEAR wa_fieldcat1.
+  wa_fieldcat1-fieldname = 'EBELN'.
+  wa_fieldcat1-tabname   = 'IT_EKKO'.
+  wa_fieldcat1-scrtext_l = 'Purchasing Document Number'.
+  APPEND wa_fieldcat1 TO it_fieldcat1.
+
+  CLEAR wa_fieldcat1.
+  wa_fieldcat1-fieldname = 'BUKRS'.
+  wa_fieldcat1-tabname   = 'IT_EKKO'.
+  wa_fieldcat1-scrtext_l = 'Company Code'.
+  APPEND wa_fieldcat1 TO it_fieldcat1.
+
+  CLEAR wa_fieldcat1.
+  wa_fieldcat1-fieldname = 'BSTYP'.
+  wa_fieldcat1-tabname   = 'IT_EKKO'.
+  wa_fieldcat1-scrtext_l = 'Purchasing Document Category'.
+  APPEND wa_fieldcat1 TO it_fieldcat1.
+
+  CLEAR wa_fieldcat1.
+  wa_fieldcat1-fieldname = 'AEDAT'.
+  wa_fieldcat1-tabname   = 'IT_EKKO'.
+  wa_fieldcat1-scrtext_l = 'Creation Date of Purchasing Document'.
+  APPEND wa_fieldcat1 TO it_fieldcat1.
+
+  CLEAR wa_fieldcat1.
+  wa_fieldcat1-fieldname = 'STATU'.
+  wa_fieldcat1-tabname   = 'IT_EKKO'.
+  wa_fieldcat1-scrtext_l = 'Status of Purchasing Document'.
+  APPEND wa_fieldcat1 TO it_fieldcat1.
+
+  CREATE OBJECT lo_obj1
+    EXPORTING
+      container_name = 'CC1'.
+  CREATE OBJECT lo_grid1
+    EXPORTING
+      i_parent = lo_obj1.
+
+  CALL METHOD lo_grid1->set_table_for_first_display
+    CHANGING
+      it_outtab                     = it_ekko
+      it_fieldcatalog               = it_fieldcat1.
+
+  CLEAR wa_fieldcat2.
+  wa_fieldcat2-fieldname = 'EBELN'.
+  wa_fieldcat2-tabname   = 'IT_EKPO'.
+  wa_fieldcat2-scrtext_l = 'Purchasing Document Number'.
+  APPEND wa_fieldcat2 TO it_fieldcat2.
+
+  CLEAR wa_fieldcat2.
+  wa_fieldcat2-fieldname = 'EBELP'.
+  wa_fieldcat2-tabname   = 'IT_EKPO'.
+  wa_fieldcat2-scrtext_l = 'Item Number of Purchasing Document'.
+  APPEND wa_fieldcat2 TO it_fieldcat2.
+
+  CLEAR wa_fieldcat2.
+  wa_fieldcat2-fieldname = 'MATNR'.
+  wa_fieldcat2-tabname   = 'IT_EKPO'.
+  wa_fieldcat2-scrtext_l = 'Material Number'.
+  APPEND wa_fieldcat2 TO it_field_fieldcat2.
+
+  CLEAR wa_fieldcat2.
+  wa_fieldcat2-fieldname = 'BUKRS'.
+  wa_fieldcat2-tabname   = 'IT_EKPO'.
+  wa_fieldcat2-scrtext_l = 'Company Code'.
+  APPEND wa_fieldcat2 TO it_fieldcat2.
+
+  CLEAR wa_fieldcat2.
+  wa_fieldcat2-fieldname = 'WERKS'.
+  wa_fieldcat2-tabname   = 'IT_EKPO'.
+  wa_fieldcat2-scrtext_l = 'Plant'.
+  APPEND wa_fieldcat2 TO it_fieldcat2.
+
+  CLEAR wa_fieldcat3.
+  wa_fieldcat3-fieldname = 'EBELN'.
+  wa_fieldcat3-tabname   = 'IT_EKPO'.
+  wa_fieldcat3-scrtext_l = 'Purchasing Document Number'.
+  APPEND wa_fieldcat3 TO it_fieldcat3.
+
+  CLEAR wa_fieldcat3.
+  wa_fieldcat3-fieldname = 'EBELP'.
+  wa_fieldcat3-tabname   = 'IT_EKET'.
+  wa_fieldcat3-scrtext_l = 'Item Number of Purchasing Document'.
+  APPEND wa_fieldcat3 TO it_fieldcat3.
+
+  CLEAR wa_fieldcat3.
+  wa_fieldcat3-fieldname = 'ETENR'.
+  wa_fieldcat3-tabname   = 'IT_EKET'.
+  wa_fieldcat3-scrtext_l = 'Delivery Schedule Line Counter'.
+  APPEND wa_fieldcat3 TO it_fieldcat3.
+
+  CLEAR wa_fieldcat3.
+  wa_fieldcat3-fieldname = 'BANFN'.
+  wa_fieldcat3-tabname   = 'IT_EKET'.
+  wa_fieldcat3-scrtext_l = 'Purchase Requisition Number'.
+  APPEND wa_fieldcat3 TO it_fieldcat3.
+
+  CREATE OBJECT lo_obj2
+    EXPORTING
+      container_name = 'CC2'.
+  CREATE OBJECT lo_grid2
+    EXPORTING
+      i_parent = lo_obj2.
+
+  CALL METHOD lo_grid2->set_table_for_first_display
+    CHANGING
+      it_outtab                     = it_ekpo
+      it_fieldcatalog               = it_fieldcat3.
+
+  CREATE OBJECT lo_obj3
+    EXPORTING
+      container_name = 'CC3'.
+
+  CREATE OBJECT lo_grid3
+    EXPORTING
+      i_parent = lo_obj3.
+
+  CALL METHOD lo_grid3->set_table_for_first_display
+    CHANGING
+      it_outtab                     = it_eket
+      it_fieldcatalog               = it_fieldcat3.
+
+  DATA: lo_obj TYPE REF TO c1.
+  CREATE OBJECT lo_obj.
+  SET HANDLER lo_obj->handle FOR lo_grid1.
+
+  DATA lo_obj4 TYPE REF TO c2.
+  CREATE OBJECT lo_obj4.
+  SET HANDLER lo_obj4->handle2 FOR lo_grid2.
+
+  CALL SCREEN '0100'.
+
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'OOALVDC'.
+  SET TITLEBAR 'TITLE'.
+ENDMODULE.
+
+MODULE user_command_0100 INPUT.
+  IF sy-ucomm = 'BACK'.
+    LEAVE TO SCREEN 0.
+  ENDIF.
+ENDMODULE.
